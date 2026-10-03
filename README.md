@@ -1,6 +1,10 @@
 # FermentIQ
 
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://fermentiq-batch-review.streamlit.app)
+
 **Automated batch record review and growth analysis for bioreactor runs.**
+
+**Live app: [fermentiq-batch-review.streamlit.app](https://fermentiq-batch-review.streamlit.app)**. Upload a batch record, or click *Try the sample record*.
 
 Upload a BioFlo 120 batch record (PDF) and FermentIQ re-checks every calculation and entry the way a QA
 reviewer would, flags documentation gaps, works out the growth kinetics, and gives you a report in the theme
@@ -36,7 +40,7 @@ Turning the same record into growth kinetics usually means retyping it into a sp
 **Adjustable settings:** organism, Gram type, pellet culture volume, temperature setpoint and tolerance,
 OD dilution limits and pH tolerance.
 
-## Try it
+## Run it locally
 ```bash
 python -m venv .venv
 .venv\Scripts\activate          # Windows
