@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 
 from .checks import run_checks
+from .exports import write_all
 from .html_report import write_html_report
 from .kinetics import analyze
 from .parse_record import parse_record
@@ -41,6 +42,7 @@ def process(pdf, out_dir, used_ids, theme=DEFAULT_THEME):
     used_ids.add(rid)
 
     html = write_html_report(record, findings, kin, out_dir, rid, theme)
+    write_all(record, findings, kin, html.parent, theme)  # PDF, Excel, chart PNGs
     counts = findings["severity"].value_counts()
     return {
         "run": rid,

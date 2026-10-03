@@ -268,7 +268,7 @@ def check_unused_rows(record, cfg):
             findings.append(Finding(
                 "unused_rows", "minor", ", ".join(map(str, unused["sample"])), f"{name} table",
                 "left blank", "struck through with a line, initials and date",
-                "Unused rows should be struck through so nothing can be added later."))
+                f"Unused rows in the {name} table should be struck through so nothing can be added later."))
     return findings
 
 

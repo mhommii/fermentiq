@@ -6,3 +6,5 @@ pdfplumber
 pytest
 ipykernel
 streamlit
+fpdf2
+openpyxl
