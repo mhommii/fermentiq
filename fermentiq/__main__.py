@@ -14,6 +14,7 @@ from .html_report import write_html_report
 from .kinetics import analyze
 from .parse_record import parse_record
 from .report import run_id
+from .style import DEFAULT_THEME, THEMES
 
 DEFAULT_INPUT = Path("data/private/raw")
 
@@ -27,7 +28,7 @@ def find_pdfs(target):
     raise SystemExit(f"Not a PDF or folder: {target}")
 
 
-def process(pdf, out_dir, used_ids):
+def process(pdf, out_dir, used_ids, theme=DEFAULT_THEME):
     """Run the full pipeline on one PDF and return a one-line summary."""
     record = parse_record(pdf)
     findings = run_checks(record)
@@ -39,7 +40,7 @@ def process(pdf, out_dir, used_ids):
         rid, n = f"{base}-{n}", n + 1
     used_ids.add(rid)
 
-    html = write_html_report(record, findings, kin, out_dir, rid)
+    html = write_html_report(record, findings, kin, out_dir, rid, theme)
     counts = findings["severity"].value_counts()
     return {
         "run": rid,
@@ -54,6 +55,8 @@ def main():
     parser.add_argument("target", nargs="?", default=DEFAULT_INPUT,
                         help="a PDF or a folder of PDFs (default: data/private/raw)")
     parser.add_argument("--out", default="data/private", help="output folder (default: data/private)")
+    parser.add_argument("--theme", default=DEFAULT_THEME, choices=list(THEMES),
+                        help=f"report theme (default: {DEFAULT_THEME})")
     args = parser.parse_args()
 
     pdfs = find_pdfs(args.target)
@@ -64,7 +67,7 @@ def main():
     done, failed, used_ids = [], [], set()
     for pdf in pdfs:
         try:
-            done.append(process(pdf, args.out, used_ids))
+            done.append(process(pdf, args.out, used_ids, args.theme))
             print(f"  OK      {pdf.name}")
         except Exception as error:  # one bad PDF must not stop the rest
             failed.append(pdf)

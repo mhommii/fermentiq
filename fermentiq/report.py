@@ -1,16 +1,7 @@
-"""Shared report pieces: run ids, charts, plain-language observations and review questions."""
+"""Shared report text: run ids, plain-language observations and questions for review."""
 
 from datetime import datetime
 
-import matplotlib
-matplotlib.use("Agg")  # draw to files, no window
-import matplotlib.pyplot as plt
-import numpy as np
-
-from . import style
-from .kinetics import logistic
-
-style.apply_theme()
 
 SEVERITIES = ["critical", "major", "minor"]
 
@@ -24,95 +15,6 @@ def run_id(record):
         date = date.replace("/", "-")
     group = record.header.get("group_id") or "batch"
     return f"{group}_{date}".lower().replace(" ", "-")
-
-
-# ---------- charts (all use the shared theme in style.py) ----------
-
-def _new_chart(title, note):
-    fig, ax = plt.subplots(figsize=(style.FIGURE_WIDTH, 3.6))
-    ax.set_title(title)
-    style.subtitle(ax, note)
-    return fig, ax
-
-
-def _save(fig, path):
-    fig.tight_layout()
-    fig.savefig(path)
-    plt.close(fig)
-
-
-def _plot_od_points(ax, df, column):
-    ok, flagged = df[df["od_flag"] == ""], df[df["od_flag"] != ""]
-    ax.plot(ok["t_h"], ok[column], "o", color=style.BLUE, label="OD600")
-    if len(flagged):
-        ax.plot(flagged["t_h"], flagged[column], "o", mfc=style.SURFACE, mec=style.BLUE,
-                label="Near instrument limit (excluded from fit)")
-
-
-def plot_growth(kin, path):
-    df, fit = kin["table"], kin["logistic"]
-    fig, ax = _new_chart("Growth curve", f"OD600 over time with logistic fit · max OD (K) = {fit['K_od']:.2f}, "
-                                         f"R² = {fit['r2']:.3f}")
-    t = np.linspace(0, df["t_h"].max(), 200)
-    ax.plot(t, logistic(t, fit["K_od"], fit["od0"], fit["r_per_h"]), color=style.INK_MUTED, lw=1.5,
-            ls=(0, (4, 3)), label="Logistic fit", zorder=1)
-    _plot_od_points(ax, df, "od600")
-    ax.set(xlabel="Time (h)", ylabel="OD600")
-    ax.set_ylim(bottom=0)
-    ax.legend(loc="lower right")
-    _save(fig, path)
-
-
-def plot_ln_od(kin, path):
-    df, mu = kin["table"], kin["mu_max"]
-    fig, ax = _new_chart("Specific growth rate", f"ln(OD600) over time · slope of the steepest linear stretch = μmax "
-                                                  f"({mu['mu_max_per_h']:.2f} h⁻¹, R² = {mu['r2']:.3f})")
-    _plot_od_points(ax, df, "ln_od")
-    window = df[(df["t_h"] >= mu["t_start_h"]) & (df["t_h"] <= mu["t_end_h"])]
-    intercept = window["ln_od"].mean() - mu["mu_max_per_h"] * window["t_h"].mean()
-    t_line = np.array([mu["t_start_h"], mu["t_end_h"]])
-    ax.plot(t_line, intercept + mu["mu_max_per_h"] * t_line, color=style.ORANGE, zorder=1,
-            label=f"μmax fit (samples {mu['first_sample']}–{mu['last_sample']})")
-    ax.set(xlabel="Time (h)", ylabel="ln(OD600)")
-    ax.legend(loc="lower right")
-    _save(fig, path)
-
-
-def plot_ph(kin, path):
-    df, mu = kin["table"], kin["mu_max"]
-    offset = (df["ph_probe"] - df["ph_meter"]).mean()
-    fig, ax = _new_chart("pH during the run", f"Bioreactor probe vs bench meter · probe reads {offset:.2f} higher "
-                                               "on average")
-    ax.plot(df["t_h"], df["ph_probe"], "o-", color=style.BLUE, label="Bioreactor probe")
-    ax.plot(df["t_h"], df["ph_meter"], "o-", color=style.ORANGE, label="Bench pH meter")
-    last = df.iloc[-1]
-    style.end_label(ax, last["t_h"], last["ph_probe"], "Probe")
-    style.end_label(ax, last["t_h"], last["ph_meter"], "Meter")
-    ax.axvline(mu["t_end_h"], color=style.BASELINE, lw=1, zorder=0)
-    ax.annotate("End of exponential growth", (mu["t_end_h"], df["ph_probe"].max()), xytext=(5, 0),
-                textcoords="offset points", fontsize=8, color=style.INK_MUTED, va="top")
-    ax.set(xlabel="Time (h)", ylabel="pH")
-    ax.set_xlim(right=df["t_h"].max() * 1.1)
-    ax.legend(loc="lower left")
-    _save(fig, path)
-
-
-def plot_pellet(kin, path):
-    df = kin["table"].dropna(subset=["pellet_recomputed_g"])
-    r = np.corrcoef(df["od600"], df["pellet_recomputed_g"])[0, 1]
-    fig, ax = _new_chart("Pellet weight vs OD600", f"Wet pellet from 1 mL culture, recomputed from tube weights · "
-                                                    f"correlation r = {r:.2f}")
-    ax.plot(df["od600"], df["pellet_recomputed_g"] * 1000, "o", color=style.BLUE)
-    mg = df["pellet_recomputed_g"] * 1000
-    for i, row in df.iterrows():
-        # if another point sits just above this one, put this label underneath so they don't collide
-        crowded = ((df["od600"] - row["od600"]).abs() < 0.06) & (mg - mg[i]).between(0, 3) & (df.index != i)
-        offset = (6, -11) if crowded.any() else (6, 3)
-        ax.annotate(f"S{row['sample']}", (row["od600"], mg[i]),
-                    textcoords="offset points", xytext=offset, fontsize=8, color=style.INK_MUTED)
-    ax.set(xlabel="OD600", ylabel="Wet pellet (mg)")
-    ax.set_ylim(bottom=0)
-    _save(fig, path)
 
 
 # ---------- report ----------

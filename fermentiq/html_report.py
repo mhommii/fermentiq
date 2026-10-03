@@ -1,19 +1,19 @@
-"""Write the batch report as one self-contained HTML page (charts embedded).
+"""The batch report as one self-contained HTML page (charts embedded), in any Theme.
 
-Open it in any browser; Ctrl+P -> Save as PDF gives a clean printable copy.
+Open it in any browser; Ctrl+P -> Save as PDF gives a printable copy in the same theme.
 """
 
 import base64
-import io
 from datetime import datetime
 from html import escape
 from pathlib import Path
 
 import pandas as pd
 
-from . import style
-from .report import (interpretation, plot_growth, plot_ln_od, plot_pellet, plot_ph,
-                     questions_for_review, run_id)
+from . import about
+from .charts import plot_growth, plot_ln_od, plot_pellet, plot_ph, render_png
+from .report import interpretation, questions_for_review, run_id
+from .style import get_theme
 
 ISSUE_NAMES = {
     "pellet_calc": "Pellet weight calculation",
@@ -46,16 +46,33 @@ ISSUE_NAMES = {
     "blank_cells": "Blank cells (should be N/A)",
 }
 
-SEVERITY = {  # label, status color (always shown with the text label, never alone)
-    "critical": ("Critical", "#d03b3b"),
-    "major": ("Major", "#ec835a"),
-    "minor": ("Minor", "#fab219"),
-}
+SEVERITY_LABELS = {"critical": "Critical", "major": "Major", "minor": "Minor"}
 
-CSS = f"""
+
+def run_title(record, kin):
+    """'E. coli growth in BioFlo 120 BIOREACTOR · Group A · 02 Oct 2026' style subtitle parts."""
+    run_date = record.process.loc[record.process["used"], "raw_date"].iloc[0]
+    try:
+        run_date = datetime.strptime(run_date, "%d/%m/%y").strftime("%d %b %Y")
+    except ValueError:
+        pass
+    organism = kin["settings"].organism_for(record)
+    return organism, record.header.get("equipment", ""), record.header.get("group_id", ""), run_date
+
+
+def sample_label(sample):
+    sample = str(sample)
+    if sample in ("all", "-"):
+        return "Run" if sample == "all" else "Record"
+    return ", ".join(f"S{s.strip()}" for s in sample.split(","))
+
+
+def _css(t):
+    return f"""
 :root {{
-  --surface: {style.SURFACE}; --page: #f4f3ef; --ink: {style.INK}; --ink-2: {style.INK_SECONDARY};
-  --muted: {style.INK_MUTED}; --line: {style.GRID}; --border: rgba(11,11,11,0.10);
+  --surface: {t.surface}; --page: {t.page}; --ink: {t.ink}; --ink-2: {t.ink_secondary};
+  --muted: {t.muted}; --line: {t.grid}; --border: {t.border}; --accent: {t.accent}; --pad: {t.table_padding}px;
+  color-scheme: {"dark" if t.dark else "light"};
 }}
 * {{ box-sizing: border-box; }}
 body {{ margin: 0; background: var(--page); color: var(--ink);
@@ -65,8 +82,9 @@ section, header {{ background: var(--surface); border: 1px solid var(--border); 
   padding: 24px 28px; margin-bottom: 16px; }}
 h1 {{ font-size: 22px; font-weight: 600; margin: 0 0 4px; }}
 h2 {{ font-size: 16px; font-weight: 600; margin: 0 0 16px; }}
-h2 .num {{ color: var(--muted); font-weight: 400; margin-right: 8px; }}
+h2 .num {{ color: var(--accent); font-weight: 600; margin-right: 8px; }}
 h3 {{ font-size: 13px; font-weight: 600; margin: 20px 0 8px; display: flex; align-items: center; gap: 8px; }}
+a {{ color: var(--accent); }}
 .meta {{ color: var(--ink-2); margin: 0; }}
 .meta-small {{ color: var(--muted); font-size: 12px; margin-top: 8px; display: flex;
   justify-content: space-between; flex-wrap: wrap; gap: 8px; }}
@@ -78,16 +96,16 @@ h3 {{ font-size: 13px; font-weight: 600; margin: 20px 0 8px; display: flex; alig
 .counts {{ list-style: none; padding: 0; margin: 6px 0 0; }}
 .counts li {{ display: flex; align-items: center; gap: 8px; font-size: 13px; }}
 .counts b {{ min-width: 18px; }}
-.dot {{ width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; }}
+.dot {{ width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none;
+  box-shadow: 0 0 0 1px var(--border); }}
 table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
 th {{ text-align: left; font-weight: 600; color: var(--ink-2); font-size: 12px;
   border-bottom: 1px solid var(--line); padding: 6px 10px 6px 0; }}
-td {{ border-bottom: 1px solid var(--line); padding: 8px 10px 8px 0; vertical-align: top; }}
+td {{ border-bottom: 1px solid var(--line); padding: var(--pad) 10px var(--pad) 0; vertical-align: top; }}
 tr:last-child td {{ border-bottom: none; }}
 td.sample {{ white-space: nowrap; font-weight: 600; width: 70px; }}
 td.issue {{ width: 190px; }}
 td.values {{ width: 230px; font-variant-numeric: tabular-nums; }}
-.recorded {{ color: var(--ink); }}
 .arrow {{ color: var(--muted); margin: 0 4px; }}
 .expected {{ color: var(--ink-2); }}
 td.why {{ color: var(--ink-2); }}
@@ -110,25 +128,24 @@ footer {{ color: var(--muted); font-size: 12px; text-align: center; margin: 8px 
 }}
 @media print {{
   @page {{ size: A4; margin: 14mm; }}
-  body {{ background: #fff; font-size: 11px; }}
+  * {{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }}  /* keep the chosen theme on paper */
+  body {{ font-size: 11px; }}
   main {{ margin: 0; max-width: none; padding: 0; }}
-  section, header {{ border: none; padding: 0 0 12px; margin-bottom: 12px; border-radius: 0; }}
+  section, header {{ margin-bottom: 10px; }}
   table, figure, .card, h3 {{ break-inside: avoid; }}
   details summary h3::after {{ content: ""; }}
 }}
 """
 
 
-def _chart(plot_fn, kin, alt):
-    buffer = io.BytesIO()
-    plot_fn(kin, buffer)
-    data = base64.b64encode(buffer.getvalue()).decode()
+def _chart(plot_fn, kin, alt, theme):
+    data = base64.b64encode(render_png(plot_fn, kin, theme)).decode()
     return f'<figure><img src="data:image/png;base64,{data}" alt="{escape(alt)}"></figure>'
 
 
 def _findings_table(rows):
     body = "".join(
-        f"<tr><td class='sample'>{escape(_sample_label(r['sample']))}</td>"
+        f"<tr><td class='sample'>{escape(sample_label(r['sample']))}</td>"
         f"<td class='issue'>{escape(ISSUE_NAMES.get(r['check'], r['check']))}</td>"
         f"<td class='values'><span class='recorded'>{escape(str(r['recorded']))}</span>"
         f"<span class='arrow'>→</span><span class='expected'>{escape(str(r['expected']))}</span></td>"
@@ -138,20 +155,13 @@ def _findings_table(rows):
             f"<th>Why it matters</th></tr></thead><tbody>{body}</tbody></table>")
 
 
-def _sample_label(sample):
-    sample = str(sample)
-    if sample in ("all", "-"):
-        return "Run" if sample == "all" else "Record"
-    return ", ".join(f"S{s.strip()}" for s in sample.split(","))
-
-
-def _findings_section(findings):
+def _findings_section(findings, t):
     parts = []
-    for key, (label, color) in SEVERITY.items():
+    for key, label in SEVERITY_LABELS.items():
         rows = findings[findings["severity"] == key]
         if not len(rows):
             continue
-        heading = f"<h3><span class='dot' style='background:{color}'></span>{label} ({len(rows)})</h3>"
+        heading = f"<h3><span class='dot' style='background:{t.status[key]}'></span>{label} ({len(rows)})</h3>"
         if key == "minor":
             parts.append(f"<details class='minor'><summary>{heading}</summary>{_findings_table(rows)}</details>")
         else:
@@ -184,46 +194,42 @@ def _list_items(markdown_lines, tag):
     return f"<{tag} class='{cls}'>{''.join(items)}</{tag}>"
 
 
-def write_html_report(record, findings, kin, out_dir="data/private", rid=None):
+def write_html_report(record, findings, kin, out_dir="data/private", rid=None, theme=None):
     rid = rid or run_id(record)
     report_dir = Path(out_dir) / "reports" / rid
     report_dir.mkdir(parents=True, exist_ok=True)
     path = report_dir / "report.html"
-    path.write_text(build_html_report(record, findings, kin), encoding="utf-8")
+    path.write_text(build_html_report(record, findings, kin, theme), encoding="utf-8")
     return path
 
 
-def build_html_report(record, findings, kin):
+def build_html_report(record, findings, kin, theme=None):
     """The full report page as a string. Nothing is written to disk (used by the upload app)."""
+    t = get_theme(theme)
     df, mu, fit = kin["table"], kin["mu_max"], kin["logistic"]
-    header = record.header
-    run_date = record.process.loc[record.process["used"], "raw_date"].iloc[0]
-    try:
-        run_date = datetime.strptime(run_date, "%d/%m/%y").strftime("%d %b %Y")
-    except ValueError:
-        pass
+    organism, equipment, group, run_date = run_title(record, kin)
     counts = findings["severity"].value_counts()
     count_items = "".join(
-        f"<li><span class='dot' style='background:{color}'></span><b>{counts.get(key, 0)}</b>{label}</li>"
-        for key, (label, color) in SEVERITY.items())
+        f"<li><span class='dot' style='background:{t.status[key]}'></span><b>{counts.get(key, 0)}</b>{label}</li>"
+        for key, label in SEVERITY_LABELS.items())
     excluded = ", ".join(f"S{s}" for s in fit["excluded_samples"])
 
-    html = f"""<!doctype html>
+    return f"""<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FermentIQ Batch Review</title>
-<style>{CSS}</style>
+<style>{_css(t)}</style>
 </head>
 <body>
 <main>
 <header>
   <h1>FermentIQ · Batch Record Review</h1>
-  <p class="meta">{escape(header.get('organism', ''))} growth in {escape(header.get('equipment', ''))}
-    · {escape(header.get('group_id', ''))} · {escape(run_date)} · {len(df)} samples · {df['t_min'].max():.0f} min run</p>
+  <p class="meta">{escape(organism)} growth in {escape(equipment)}
+    · {escape(group)} · {escape(run_date)} · {len(df)} samples · {df['t_min'].max():.0f} min run</p>
   <div class="meta-small"><span>Source: {escape(Path(record.source).name)}</span>
-    <span>Generated {datetime.now():%d %b %Y, %H:%M}</span></div>
+    <span>Generated {datetime.now():%d %b %Y, %H:%M} · {escape(t.label)} theme</span></div>
 </header>
 
 <section>
@@ -245,15 +251,15 @@ def build_html_report(record, findings, kin):
   <h2><span class="num">1</span>Data integrity findings</h2>
   <p class="note">Every calculation and entry in the batch record was re-checked. Recorded values are shown
     next to what they should be.</p>
-  {_findings_section(findings)}
+  {_findings_section(findings, t)}
 </section>
 
 <section>
   <h2><span class="num">2</span>Growth kinetics</h2>
   <p class="note">Time from clock time. OD600 uses the dilution-corrected value where a sample was diluted.
     {('Excluded from fit: ' + excluded + ' (read near instrument limit).') if excluded else ''}</p>
-  {_chart(plot_growth, kin, "Growth curve")}
-  {_chart(plot_ln_od, kin, "Specific growth rate")}
+  {_chart(plot_growth, kin, "Growth curve", t)}
+  {_chart(plot_ln_od, kin, "Specific growth rate", t)}
   <h3>Key observations</h3>
   {_list_items(interpretation(findings, kin), "ul")}
   <h3>Sample data</h3>
@@ -262,8 +268,8 @@ def build_html_report(record, findings, kin):
 
 <section>
   <h2><span class="num">3</span>Process and instruments</h2>
-  {_chart(plot_ph, kin, "pH during the run")}
-  {_chart(plot_pellet, kin, "Pellet weight vs OD600")}
+  {_chart(plot_ph, kin, "pH during the run", t)}
+  {_chart(plot_pellet, kin, "Pellet weight vs OD600", t)}
 </section>
 
 <section>
@@ -271,7 +277,9 @@ def build_html_report(record, findings, kin):
   {_list_items(questions_for_review(findings, df), "ol")}
 </section>
 
-<footer>FermentIQ · automated batch record review and growth analysis</footer>
+<footer>{about.NAME} · {escape(about.TAGLINE.lower())}<br>
+  Built by {escape(about.AUTHOR)} · <a href="{about.GITHUB_URL}">GitHub</a> ·
+  <a href="{about.LINKEDIN_URL}">LinkedIn</a></footer>
 </main>
 <script>
   // expand collapsed sections when printing so nothing is hidden on paper
@@ -280,4 +288,3 @@ def build_html_report(record, findings, kin):
 </body>
 </html>
 """
-    return html
