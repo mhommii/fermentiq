@@ -1,10 +1,9 @@
-numpy
-pandas
-scipy
-matplotlib
-pdfplumber
-pytest
-ipykernel
-streamlit
-fpdf2
-openpyxl
+# What the app and the command line need (pinned so hosting installs exactly what was tested)
+fpdf2==2.8.9
+matplotlib==3.11.2
+numpy==2.5.3
+openpyxl==3.1.5
+pandas==3.0.6
+pdfplumber==0.11.10
+scipy==1.18.1
+streamlit==1.65.0

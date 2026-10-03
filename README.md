@@ -1,73 +1,87 @@
-# FermentIQ 🧫
+# FermentIQ
 
-**Automated batch-record review and growth analysis for bioreactor runs.**
+**Automated batch record review and growth analysis for bioreactor runs.**
 
-> 🚧 Work in progress. I'm building this in public as a biomanufacturing student.
+Upload a BioFlo 120 batch record (PDF) and FermentIQ re-checks every calculation and entry the way a QA
+reviewer would, flags documentation gaps, works out the growth kinetics, and gives you a report in the theme
+and format you choose.
+
+Built by **Mohammad Hommam Ijaz** · [GitHub](https://github.com/mhommii) ·
+[LinkedIn](https://www.linkedin.com/in/mohammad-hommam-ijaz/)
 
 ## The problem
-Bioreactor runs are documented on paper-style batch records. Reviewing them by hand is slow, and
-errors slip through: wrong calculations, inconsistent times, missing signatures, readings outside an
-instrument's range. Turning the same record into growth kinetics usually means retyping it into a spreadsheet.
+Bioreactor runs are documented on paper-style batch records. Reviewing them by hand is slow, and errors slip
+through: wrong calculations, inconsistent times, missing signatures, readings outside an instrument's range.
+Turning the same record into growth kinetics usually means retyping it into a spreadsheet.
 
-## What FermentIQ does
-Give it a batch-record PDF and it:
-
-**Module 1: Batch record checker** (data integrity and Good Documentation Practice)
-- Re-checks every calculation: pellet weights, dilution-corrected absorbance
+## What it does
+**Batch record checker** (data integrity and Good Documentation Practice)
+- Recalculates pellet weights and dilution-corrected absorbance
 - Cross-checks time points against clock times and between pages
 - Flags OD readings near the spectrophotometer limit, pH probe vs meter disagreement, and process deviations
-- Flags biology inconsistencies (e.g. a Gram stain result that doesn't fit the organism)
-- Finds GDP gaps: missing or unknown initials, blank required fields, unused rows not struck through,
-  inconsistent formats, non-process notes
+- Checks Gram stain results against the organism's Gram type
+- Finds GDP gaps: missing or unknown initials, self-verification, blank fields, unused rows not struck
+  through, inconsistent dates, units and terminology
 
-**Module 2: Growth kinetics**
-- μmax from the steepest straight stretch of ln(OD600) vs time, plus doubling time
-- Logistic growth fit (max OD, rate)
-- Growth phase for each interval, alongside pH
+**Growth kinetics**
+- μmax from the steepest straight stretch of ln(OD600), plus doubling time
+- Logistic growth fit (maximum OD), growth phase for each interval, alongside pH
 
-**Output:** a Markdown report with findings ranked by severity, kinetics, charts and questions for review, plus CSV exports.
+**Reports**
+- Five themes: Classic, Dark, Print (black & white), Lab / clinical, Modern tech. Each restyles both the
+  page and the charts, and all chart palettes are checked for colorblind safety.
+- Downloads: HTML report, PDF report, Excel workbook (summary, findings, samples, raw tables, settings),
+  and chart images
 
-## Quick start
+**Adjustable settings:** organism, Gram type, pellet culture volume, temperature setpoint and tolerance,
+OD dilution limits and pH tolerance.
+
+## Try it
 ```bash
 python -m venv .venv
 .venv\Scripts\activate          # Windows
 pip install -r requirements.txt
+streamlit run app.py            # or double-click "Start FermentIQ App.bat"
 ```
+In the browser, click **Try the sample record** or upload your own batch record.
 
-**Upload app:** double-click **`Start FermentIQ App.bat`** (or `streamlit run app.py`). The browser opens;
-upload one or more batch-record PDFs and each gets its own report with a download button. Uploads are
-analyzed in memory and never stored; only an anonymous count of records checked is kept.
-
-**Run it on a folder:** put batch-record PDFs in `data/private/raw/`, then double-click **`Run FermentIQ.bat`**, or:
+**Command line** (one report folder per PDF, with HTML, PDF, Excel and chart images):
 ```bash
-python -m fermentiq                     # every PDF in data/private/raw/
-python -m fermentiq "path/to/record.pdf"   # just one PDF
-python -m pytest                        # run the tests
+python -m fermentiq                          # every PDF in data/private/raw/
+python -m fermentiq "record.pdf" --theme lab
 ```
-Each PDF gets its own folder in `data/private/reports/<group>_<date>/` with `report.html`
-(open in a browser; Ctrl+P → Save as PDF).
-A PDF that can't be read is reported as failed without stopping the others.
-Learning walkthrough: `notebooks/01_walkthrough.ipynb`
+
+## Privacy
+- Uploads are analyzed in memory for your session only. Nothing from the file is saved or shown to anyone
+  else; the app keeps only an anonymous count of records checked.
+- The sample record in `samples/` is a real run with every identity removed: no institution logo or name,
+  no metadata, initials replaced with neutral codes, group name and free-text notes removed. Measurements
+  are unchanged. It was made with `scripts/make_public_sample.py`, which refuses to save the sample if
+  anything identifying is left.
+- Lab data, reports and data-specific tests live in `data/private/` and `tests/private/` and are never
+  committed.
 
 ## Project layout
 ```
-fermentiq/parse_record.py   PDF -> structured tables (keeps raw text for GDP checks)
-fermentiq/checks.py         data-integrity and GDP checks -> findings
-fermentiq/kinetics.py       mu_max, doubling time, logistic fit, phases
-fermentiq/report.py         charts, observations, review questions
-fermentiq/html_report.py    themed HTML report
-fermentiq/settings.py       adjustable analysis settings
+app.py                         Streamlit app (sidebar, tabs, themes, downloads)
+fermentiq/parse_record.py      PDF -> structured tables (keeps raw text for GDP checks)
+fermentiq/checks.py            data-integrity and GDP checks -> findings
+fermentiq/kinetics.py          μmax, doubling time, logistic fit, phases
+fermentiq/settings.py          adjustable analysis settings
+fermentiq/style.py             report themes
+fermentiq/charts.py            the four charts, drawn in any theme
+fermentiq/html_report.py       themed HTML report
+fermentiq/exports.py           PDF, Excel and chart-image downloads
+scripts/make_public_sample.py  anonymized sample from a private record (dev only)
+tests/                         public tests on the anonymized sample
 ```
 
-## Data
-Built and tested on real *E. coli* runs in a BioFlo 120 bioreactor from my university lab.
-Lab data, reports and data-specific tests stay in `data/private/` and `tests/private/` and are
-**not** included in this repository.
+## Development
+```bash
+pip install -r requirements-dev.txt
+python -m pytest
+```
+Learning walkthrough: `notebooks/01_walkthrough.ipynb`
 
-## Roadmap
-- [x] Parse batch-record PDFs, including highlighted Y/N selections
-- [x] Data-integrity and GDP checks
-- [x] Growth kinetics and report
-- [ ] Streamlit app: upload a PDF, see findings and charts
-- [ ] Multi-run comparison
-- [ ] PDF report export, optional AI summary
+## License
+Copyright (c) 2026 Mohammad Hommam Ijaz. All rights reserved. See [LICENSE](LICENSE).

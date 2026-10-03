@@ -9,6 +9,7 @@ import matplotlib
 import pandas as pd
 from fpdf import FPDF
 from fpdf.fonts import FontFace
+from openpyxl.styles import Font
 
 from . import about
 from .charts import ALL_CHARTS, render_png
@@ -230,7 +231,7 @@ def build_excel(record, findings, kin):
             sheet = writer.sheets[name]
             sheet.freeze_panes = "A2"
             for cell in sheet[1]:
-                cell.font = cell.font.copy(bold=True)
+                cell.font = Font(bold=True)
             for column in sheet.columns:  # rough auto-width, capped so long text stays readable
                 longest = max(len(str(c.value)) if c.value is not None else 0 for c in column)
                 sheet.column_dimensions[column[0].column_letter].width = min(max(10, longest + 2), 60)
