@@ -1,0 +1,24 @@
+# --- PRIVATE LAB DATA: never commit ---
+data/private/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.ipynb_checkpoints/
+.pytest_cache/
+
+# Secrets (e.g. API keys added later)
+.env
+.streamlit/secrets.toml
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Tests that contain real lab values
+tests/private/
+
+# Local usage counter
+data/usage.json

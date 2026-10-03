@@ -1,0 +1,17 @@
+# Same palette as fermentiq/style.py so the app and the reports look like one product.
+[theme]
+base = "light"
+primaryColor = "#2a78d6"
+backgroundColor = "#fcfcfb"
+secondaryBackgroundColor = "#f4f3ef"
+textColor = "#0b0b0b"
+font = "sans serif"
+
+[server]
+maxUploadSize = 20  # MB; batch records are well under this
+
+[browser]
+gatherUsageStats = false  # don't send Streamlit usage telemetry
+
+[client]
+toolbarMode = "minimal"
