@@ -132,7 +132,7 @@ with st.sidebar:
 
     st.divider()
     st.caption(":material/lock: Files are analyzed in memory and never stored. "
-               f"{usage.records_checked()} batch records checked so far.")
+               f"{usage.records_checked()} batch records checked since the app last started.")
     st.markdown(f"Built by **{about.AUTHOR}**  \n[GitHub]({about.GITHUB_URL}) · [LinkedIn]({about.LINKEDIN_URL})")
 
 
@@ -169,8 +169,8 @@ def welcome():
     st.subheader("Supported form and privacy")
     st.markdown("FermentIQ reads the typed **BioFlo 120 E. coli batch record** form (process table, pellet and "
                 "Gram stain table, OD600 table). Scans, photos and other forms are rejected with a clear message.\n\n"
-                "Your file is analyzed in memory for your session only. It is never saved, logged or shown to "
-                "anyone else. The only thing kept is an anonymous count of records checked.")
+                "Your file is analyzed in memory on the app's server for your session only. It is never saved, "
+                "logged or shown to anyone else. The only thing kept is an anonymous count of records checked.")
 
     st.subheader("About")
     st.markdown(f"FermentIQ is a biomanufacturing portfolio project by **{about.AUTHOR}**, built to turn paper-style "

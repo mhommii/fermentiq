@@ -15,3 +15,4 @@ gatherUsageStats = false  # don't send Streamlit usage telemetry
 
 [client]
 toolbarMode = "minimal"
+showErrorDetails = "none"  # visitors never see tracebacks (which could include file contents)
